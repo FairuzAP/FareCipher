@@ -14,12 +14,6 @@
 
 #define ROUND_NUM 32
 
-uint32_t key[KEY_WORD_SIZE] = {
-	229312599,82860714,63860703,21252322, 
-	247670309,219224476,105156263,133249160
-};
-
-uint32_t subkeys[ROUND_NUM][SUBKEY_WORD_SIZE];
 
 uint32_t rotl32 (uint32_t value, unsigned int count) {
     return (value << count) | (value >> (32-count));
@@ -29,8 +23,12 @@ uint32_t rotr32 (uint32_t value, unsigned int count) {
     return (value >> count) | (value << (32-count));
 }
 
-void expand_key() {
-	
+void expand_key(uint8_t const k[KEY_BYTE_SIZE], 
+				uint8_t sk[ROUND_NUM][SUBKEY_BYTE_SIZE]
+				) {
+
+	uint32_t *key = (uint32_t *) k;
+	uint32_t subkeys[ROUND_NUM][SUBKEY_WORD_SIZE];
 	uint32_t temp;
 	
 	for(int i=0; i<ROUND_NUM/2; i++) {
@@ -75,11 +73,13 @@ void expand_key() {
 		subkeys[i][3] ^= key[7];
 		
 	}
+	
+	memcpy(sk, subkeys, sizeof(subkeys));
 }
 
-void print_sub_key() {
+void print_sub_key(uint8_t subkeys[ROUND_NUM][SUBKEY_BYTE_SIZE]) {
 	for(int i = 0; i < ROUND_NUM; i++) {
-		for(int j = 0; j < SUBKEY_WORD_SIZE; j++) {
+		for(int j = 0; j < SUBKEY_BYTE_SIZE; j++) {
 			printf("%u ", subkeys[i][j]);
 		}
 		printf("\n");
@@ -87,8 +87,17 @@ void print_sub_key() {
 }
 
 int main() {
-	expand_key();
-	print_sub_key();
+	
+	uint8_t key[KEY_BYTE_SIZE] = {
+		027, 066, 072, 073, 100, 101, 104, 110, 
+		119, 120, 122, 129, 132, 135, 139, 142, 
+		144, 151, 159, 160, 196, 212, 214, 220, 
+		224, 234, 235, 237, 238, 241, 248, 252
+	};
+	uint8_t subkeys[ROUND_NUM][SUBKEY_BYTE_SIZE];
+	
+	expand_key(key, subkeys);
+	print_sub_key(subkeys);
 	return 0;
 }
 
