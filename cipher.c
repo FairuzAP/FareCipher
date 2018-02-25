@@ -8,6 +8,7 @@
 #define KEY_WORD_SIZE 8
 
 #define BLOCK_BYTE_SIZE 32
+#define HALF_BLOCK_BYTE_SIZE 16
 
 #define SUBKEY_BYTE_SIZE 16
 #define SUBKEY_WORD_SIZE 4
@@ -26,8 +27,10 @@ uint32_t rotr32 (uint32_t value, unsigned int count) {
 void expand_key(uint8_t const k[KEY_BYTE_SIZE], 
 				uint8_t sk[ROUND_NUM][SUBKEY_BYTE_SIZE]
 				) {
-
-	uint32_t *key = (uint32_t *) k;
+	
+	uint32_t key[KEY_WORD_SIZE];
+	memcpy(key, k, sizeof(k));
+	
 	uint32_t subkeys[ROUND_NUM][SUBKEY_WORD_SIZE];
 	uint32_t temp;
 	
@@ -84,6 +87,59 @@ void print_sub_key(uint8_t subkeys[ROUND_NUM][SUBKEY_BYTE_SIZE]) {
 		}
 		printf("\n");
 	}	
+}
+
+void round_function(uint8_t const in[HALF_BLOCK_BYTE_SIZE],
+					uint8_t const rk[SUBKEY_BYTE_SIZE],
+					uint8_t out[HALF_BLOCK_BYTE_SIZE]
+					) {
+	
+	// TODO: Implement This Thing
+	
+}
+
+// UNTESTED
+void encrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
+					uint8_t const sk[ROUND_NUM][SUBKEY_BYTE_SIZE],
+					uint8_t out[BLOCK_BYTE_SIZE]
+					) {
+	
+	uint8_t right[HALF_BLOCK_BYTE_SIZE];
+	memcpy(out, in, sizeof(in));
+	
+	for(int i=0; i<ROUND_NUM; i++) {
+
+		memcpy(right, &out[HALF_BLOCK_BYTE_SIZE], sizeof(right));
+		round_function(&out[HALF_BLOCK_BYTE_SIZE], sk[i], &out[HALF_BLOCK_BYTE_SIZE]);
+		
+		for(int j=0; j<HALF_BLOCK_BYTE_SIZE; j++) {
+			out[HALF_BLOCK_BYTE_SIZE+j] ^= out[j];
+		} 
+		memcpy(&out[0], right, sizeof(right));
+
+	}
+}
+
+// UNTESTED
+void decrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
+					uint8_t const sk[ROUND_NUM][SUBKEY_BYTE_SIZE],
+					uint8_t out[BLOCK_BYTE_SIZE]
+					) {
+	
+	uint8_t left[HALF_BLOCK_BYTE_SIZE];
+	memcpy(out, in, sizeof(in));
+	
+	for(int i=ROUND_NUM-1; i>=0; i--) {
+		
+		memcpy(left, &out[0], sizeof(left));
+		round_function(&out[0], sk[i], &out[0]);
+		
+		for(int j=0; j<HALF_BLOCK_BYTE_SIZE; j++) {
+			out[j] ^= out[HALF_BLOCK_BYTE_SIZE+j];
+		} 
+		memcpy(&out[HALF_BLOCK_BYTE_SIZE], left, sizeof(left));
+		
+	}
 }
 
 int main() {
