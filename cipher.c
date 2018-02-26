@@ -29,7 +29,7 @@ void expand_key(uint8_t const k[KEY_BYTE_SIZE],
 				) {
 	
 	uint32_t key[KEY_WORD_SIZE];
-	memcpy(key, k, sizeof(k));
+	memcpy(key, k, KEY_BYTE_SIZE);
 	
 	uint32_t subkeys[ROUND_NUM][SUBKEY_WORD_SIZE];
 	uint32_t temp;
@@ -69,7 +69,7 @@ void expand_key(uint8_t const k[KEY_BYTE_SIZE],
 		key[KEY_WORD_SIZE-1] = rotl32(temp, 1);
 		
 		// XOR
-		memcpy(subkeys[i], key, sizeof(subkeys[i]));
+		memcpy(subkeys[i], key, SUBKEY_BYTE_SIZE);
 		subkeys[i][0] ^= key[4];
 		subkeys[i][1] ^= key[5];
 		subkeys[i][2] ^= key[6];
@@ -77,7 +77,7 @@ void expand_key(uint8_t const k[KEY_BYTE_SIZE],
 		
 	}
 	
-	memcpy(sk, subkeys, sizeof(subkeys));
+	memcpy(sk, subkeys, SUBKEY_BYTE_SIZE*ROUND_NUM);
 }
 
 void print_sub_key(uint8_t subkeys[ROUND_NUM][SUBKEY_BYTE_SIZE]) {
@@ -98,46 +98,44 @@ void round_function(uint8_t const in[HALF_BLOCK_BYTE_SIZE],
 	
 }
 
-// UNTESTED
 void encrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
 					uint8_t const sk[ROUND_NUM][SUBKEY_BYTE_SIZE],
 					uint8_t out[BLOCK_BYTE_SIZE]
 					) {
 	
 	uint8_t right[HALF_BLOCK_BYTE_SIZE];
-	memcpy(out, in, sizeof(in));
+	memcpy(out, in, BLOCK_BYTE_SIZE);
 	
 	for(int i=0; i<ROUND_NUM; i++) {
 
-		memcpy(right, &out[HALF_BLOCK_BYTE_SIZE], sizeof(right));
+		memcpy(right, &out[HALF_BLOCK_BYTE_SIZE], HALF_BLOCK_BYTE_SIZE);
 		round_function(&out[HALF_BLOCK_BYTE_SIZE], sk[i], &out[HALF_BLOCK_BYTE_SIZE]);
 		
 		for(int j=0; j<HALF_BLOCK_BYTE_SIZE; j++) {
 			out[HALF_BLOCK_BYTE_SIZE+j] ^= out[j];
 		} 
-		memcpy(&out[0], right, sizeof(right));
+		memcpy(&out[0], right, HALF_BLOCK_BYTE_SIZE);
 
 	}
 }
 
-// UNTESTED
 void decrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
 					uint8_t const sk[ROUND_NUM][SUBKEY_BYTE_SIZE],
 					uint8_t out[BLOCK_BYTE_SIZE]
 					) {
 	
 	uint8_t left[HALF_BLOCK_BYTE_SIZE];
-	memcpy(out, in, sizeof(in));
+	memcpy(out, in, BLOCK_BYTE_SIZE);
 	
 	for(int i=ROUND_NUM-1; i>=0; i--) {
 		
-		memcpy(left, &out[0], sizeof(left));
+		memcpy(left, &out[0], HALF_BLOCK_BYTE_SIZE);
 		round_function(&out[0], sk[i], &out[0]);
 		
 		for(int j=0; j<HALF_BLOCK_BYTE_SIZE; j++) {
 			out[j] ^= out[HALF_BLOCK_BYTE_SIZE+j];
 		} 
-		memcpy(&out[HALF_BLOCK_BYTE_SIZE], left, sizeof(left));
+		memcpy(&out[HALF_BLOCK_BYTE_SIZE], left, HALF_BLOCK_BYTE_SIZE);
 		
 	}
 }
@@ -146,7 +144,7 @@ int main() {
 	
 	uint8_t key[KEY_BYTE_SIZE] = {
 		027, 066, 072, 073, 100, 101, 104, 110, 
-		119, 120, 122, 129, 132, 135, 139, 142, 
+		119, 120, 122, 129, 132, 135, 138, 142, 
 		144, 151, 159, 160, 196, 212, 214, 220, 
 		224, 234, 235, 237, 238, 241, 248, 252
 	};
