@@ -25,6 +25,21 @@ uint32_t rotr32 (uint32_t value, unsigned int count) {
     return (value >> count) | (value << (32-count));
 }
 
+uint64_t count_bit_change(uint8_t *a, uint8_t *b, size_t len) {
+	uint8_t x;
+	uint64_t diff = 0;
+	for(int i=0; i<len; i++) {
+		x = a[i] ^ b[i];
+		while(x != 0) {
+			if(x & 1) {
+				diff += 1;
+			}
+			x = x >> 1;
+		}
+	}
+	return diff;
+}
+
 void expand_key(uint8_t const k[KEY_BYTE_SIZE], 
 				uint8_t sk[ROUND_NUM][SUBKEY_BYTE_SIZE]
 				) {
@@ -95,8 +110,20 @@ void round_function(uint8_t const in[HALF_BLOCK_BYTE_SIZE],
 					uint8_t out[HALF_BLOCK_BYTE_SIZE]
 					) {
 	
-	// TODO: Implement This Thing
+	memcpy(out, in, HALF_BLOCK_BYTE_SIZE);
 	
+	for(int i=0; i<HALF_BLOCK_BYTE_SIZE; i++) {
+		out[i] ^= rk[i];
+	}
+	
+	uint8_t carry = 0;
+	for (int i = 0; i < HALF_BLOCK_BYTE_SIZE; i++) {
+		uint8_t next = (out[i] & 1) ? 0x80 : 0;
+		out[i] = out[i] >> 1;
+		out[i] |= carry;
+		carry = next;
+	}
+	out[0] |= carry;
 }
 
 void encrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
@@ -111,6 +138,8 @@ void encrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
 
 		memcpy(right, &out[HALF_BLOCK_BYTE_SIZE], HALF_BLOCK_BYTE_SIZE);
 		round_function(&out[HALF_BLOCK_BYTE_SIZE], sk[i], &out[HALF_BLOCK_BYTE_SIZE]);
+		//uint64_t diff = count_bit_change((uint8_t *)right, (uint8_t *)&out[HALF_BLOCK_BYTE_SIZE], sizeof(right));
+		//printf("%" PRIu64 ", ", diff);
 		
 		for(int j=0; j<HALF_BLOCK_BYTE_SIZE; j++) {
 			out[HALF_BLOCK_BYTE_SIZE+j] ^= out[j];
@@ -118,6 +147,7 @@ void encrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
 		memcpy(&out[0], right, HALF_BLOCK_BYTE_SIZE);
 
 	}
+	//printf("\n");
 }
 
 void decrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
@@ -141,20 +171,6 @@ void decrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
 	}
 }
 
-uint64_t count_bit_change(uint8_t *a, uint8_t *b, size_t len) {
-	uint8_t x;
-	uint64_t diff = 0;
-	for(int i=0; i<len; i++) {
-		x = a[i] ^ b[i];
-		while(x != 0) {
-			if(x & 1) {
-				diff += 1;
-			}
-			x = x >> 1;
-		}
-	}
-	return diff;
-}
 
 int main() {
 	
@@ -176,9 +192,42 @@ int main() {
 	uint8_t subkeys2[ROUND_NUM][SUBKEY_BYTE_SIZE];
 	expand_key(key2, subkeys2);
 	
-	size_t bit_num = sizeof(subkeys)*8;
-	uint64_t diff = count_bit_change((uint8_t *)subkeys, (uint8_t *)subkeys2, sizeof(subkeys));
-	printf("%" PRIu64 "\n", diff);
+	uint64_t diff = count_bit_change((uint8_t *)key, (uint8_t *)key2, sizeof(key));
+	printf("Key Diff = %" PRIu64 "\n", diff);
+	diff = count_bit_change((uint8_t *)subkeys, (uint8_t *)subkeys2, sizeof(subkeys));
+	printf("Subkey Diff = %" PRIu64 "\n", diff);
+	
+	uint8_t plainblock[BLOCK_BYTE_SIZE] = {
+		3, 11, 28, 30, 36, 42, 43, 51, 
+		61, 63, 72, 88, 96, 98, 111, 115, 
+		118, 120, 123, 164, 165, 166, 174, 177, 
+		179, 198, 197, 200, 242, 248, 249, 250
+	};
+	uint8_t cipherblock[BLOCK_BYTE_SIZE];
+	uint8_t decryptblock[BLOCK_BYTE_SIZE];
+	encrypt_blocks(plainblock, subkeys, cipherblock);
+	decrypt_blocks(cipherblock, subkeys, decryptblock);
+	
+	diff = count_bit_change((uint8_t *)plainblock, (uint8_t *)cipherblock, sizeof(plainblock));
+	printf("P vs C = %" PRIu64 "\n", diff);
+	diff = count_bit_change((uint8_t *)plainblock, (uint8_t *)decryptblock, sizeof(plainblock));
+	printf("P vs D = %" PRIu64 "\n", diff);
+	
+	uint8_t plainblock2[BLOCK_BYTE_SIZE] = {
+		3, 11, 28, 30, 36, 42, 43, 51, 
+		61, 63, 72, 88, 96, 98, 111, 115, 
+		118, 120, 123, 164, 165, 166, 174, 177, 
+		179, 198, 197, 200, 242, 248, 249, 251
+	};
+	uint8_t cipherblock2[BLOCK_BYTE_SIZE];
+	uint8_t decryptblock2[BLOCK_BYTE_SIZE];
+	encrypt_blocks(plainblock2, subkeys2, cipherblock2);
+	decrypt_blocks(cipherblock2, subkeys2, decryptblock2);
+	
+	diff = count_bit_change((uint8_t *)plainblock, (uint8_t *)plainblock2, sizeof(key));
+	printf("Plain Diff = %" PRIu64 "\n", diff);
+	diff = count_bit_change((uint8_t *)cipherblock, (uint8_t *)cipherblock2, sizeof(cipherblock));
+	printf("Cipher Diff = %" PRIu64 "\n", diff);
 	
 	return 0;
 }
