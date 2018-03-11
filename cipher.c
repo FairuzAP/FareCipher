@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <limits.h>
+#include <inttypes.h>
 #include <string.h>
 
 #define KEY_BYTE_SIZE 32
@@ -140,18 +141,45 @@ void decrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
 	}
 }
 
+uint64_t count_bit_change(uint8_t *a, uint8_t *b, size_t len) {
+	uint8_t x;
+	uint64_t diff = 0;
+	for(int i=0; i<len; i++) {
+		x = a[i] ^ b[i];
+		while(x != 0) {
+			if(x & 1) {
+				diff += 1;
+			}
+			x = x >> 1;
+		}
+	}
+	return diff;
+}
+
 int main() {
 	
 	uint8_t key[KEY_BYTE_SIZE] = {
-		027, 066, 072, 073, 100, 101, 104, 110, 
+		27, 66, 72, 73, 100, 101, 104, 110, 
 		119, 120, 122, 129, 132, 135, 138, 142, 
 		144, 151, 159, 160, 196, 212, 214, 220, 
 		224, 234, 235, 237, 238, 241, 248, 252
 	};
 	uint8_t subkeys[ROUND_NUM][SUBKEY_BYTE_SIZE];
-	
 	expand_key(key, subkeys);
-	print_sub_key(subkeys);
+	
+	uint8_t key2[KEY_BYTE_SIZE] = {
+		27, 66, 72, 73, 100, 101, 104, 110, 
+		119, 120, 122, 129, 132, 135, 138, 142, 
+		144, 151, 159, 160, 196, 212, 214, 220, 
+		224, 234, 235, 237, 238, 241, 248, 252
+	};
+	uint8_t subkeys2[ROUND_NUM][SUBKEY_BYTE_SIZE];
+	expand_key(key2, subkeys2);
+	
+	size_t bit_num = sizeof(subkeys)*8;
+	uint64_t diff = count_bit_change((uint8_t *)subkeys, (uint8_t *)subkeys2, sizeof(subkeys));
+	printf("%" PRIu64 "\n", diff);
+	
 	return 0;
 }
 
