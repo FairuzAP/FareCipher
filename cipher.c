@@ -5,6 +5,10 @@
 #include <inttypes.h>
 #include <string.h>
 
+#include <time.h>
+#include <openssl/aes.h>
+
+
 #define KEY_BYTE_SIZE 32
 #define KEY_WORD_SIZE 8
 
@@ -17,10 +21,21 @@
 #define ROUND_NUM 32
 
 
+struct timespec timer_start(){
+    struct timespec start_time;
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_time);
+    return start_time;
+}
+long timer_end(struct timespec start_time){
+    struct timespec end_time;
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_time);
+    long diffInNanos = (end_time.tv_sec - start_time.tv_sec) * (long)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
+    return diffInNanos;
+}
+
 uint32_t rotl32 (uint32_t value, unsigned int count) {
     return (value << count) | (value >> (32-count));
 }
-
 uint32_t rotr32 (uint32_t value, unsigned int count) {
     return (value >> count) | (value << (32-count));
 }
@@ -142,8 +157,6 @@ void encrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
 
 		memcpy(right, &out[HALF_BLOCK_BYTE_SIZE], HALF_BLOCK_BYTE_SIZE);
 		round_function(&out[HALF_BLOCK_BYTE_SIZE], sk[i], &out[HALF_BLOCK_BYTE_SIZE]);
-		//uint64_t diff = count_bit_change((uint8_t *)right, (uint8_t *)&out[HALF_BLOCK_BYTE_SIZE], sizeof(right));
-		//printf("%" PRIu64 ", ", diff);
 		
 		for(int j=0; j<HALF_BLOCK_BYTE_SIZE; j++) {
 			out[HALF_BLOCK_BYTE_SIZE+j] ^= out[j];
@@ -151,7 +164,6 @@ void encrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
 		memcpy(&out[0], right, HALF_BLOCK_BYTE_SIZE);
 
 	}
-	//printf("\n");
 }
 
 void decrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
@@ -175,9 +187,7 @@ void decrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
 	}
 }
 
-
-int main() {
-	
+void test_diffusion() {
 	uint8_t key[KEY_BYTE_SIZE] = {
 		27, 66, 72, 73, 100, 101, 104, 110, 
 		119, 120, 122, 129, 132, 135, 138, 142, 
@@ -231,8 +241,61 @@ int main() {
 	diff = count_bit_change((uint8_t *)plainblock, (uint8_t *)plainblock2, sizeof(key));
 	printf("Plain Diff = %" PRIu64 "\n", diff);
 	diff = count_bit_change((uint8_t *)cipherblock, (uint8_t *)cipherblock2, sizeof(cipherblock));
-	printf("Cipher Diff = %" PRIu64 "\n", diff);
+	printf("Cipher Diff = %" PRIu64 "\n", diff);	
+
+}
+
+void test_performance() {
 	
+	struct timespec before;
+	long nsec;
+	
+	uint8_t key[KEY_BYTE_SIZE] = {
+		27, 66, 72, 73, 100, 101, 104, 110, 
+		119, 120, 122, 129, 132, 135, 138, 142, 
+		144, 151, 159, 160, 196, 212, 214, 220, 
+		224, 234, 235, 237, 238, 241, 248, 252
+	};
+	uint8_t plainblock[BLOCK_BYTE_SIZE] = {
+		3, 11, 28, 30, 36, 42, 43, 51, 
+		61, 63, 72, 88, 96, 98, 111, 115, 
+		118, 120, 123, 164, 165, 166, 174, 177, 
+		179, 198, 197, 200, 242, 248, 249, 250
+	};
+	
+	
+	uint8_t cipherblock[BLOCK_BYTE_SIZE];
+	uint8_t subkeys[ROUND_NUM][SUBKEY_BYTE_SIZE];
+
+	before = timer_start();
+	expand_key(key, subkeys);
+	nsec = timer_end(before);
+    printf("Key expand time: %ld nsec\n", nsec);
+
+	before = timer_start();
+    encrypt_blocks(plainblock, subkeys, cipherblock);
+	nsec = timer_end(before);
+    printf("32 byte block encrypt time: %ld nsec\n", nsec);
+	
+	uint8_t cipherblock_aes[BLOCK_BYTE_SIZE];	
+	AES_KEY enc_key;
+
+	before = timer_start();
+    AES_set_encrypt_key(key, 256, &enc_key);
+	nsec = timer_end(before);
+    printf("AES Key expand time: %ld nsec\n", nsec);
+
+	before = timer_start();
+    AES_encrypt(plainblock, cipherblock_aes, &enc_key);
+    AES_encrypt(&plainblock[16], &cipherblock_aes[16], &enc_key);
+	nsec = timer_end(before);
+    printf("AES 32 byte block encrypt time: %ld nsec\n", nsec);
+}
+
+
+int main() {
+	test_diffusion();
+	test_performance();
 	return 0;
 }
 

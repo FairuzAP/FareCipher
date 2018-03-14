@@ -1,0 +1,1 @@
+g++ -o cipher cipher.c -lssl -lcrypto
