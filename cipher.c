@@ -112,6 +112,10 @@ void round_function(uint8_t const in[HALF_BLOCK_BYTE_SIZE],
 	
 	memcpy(out, in, HALF_BLOCK_BYTE_SIZE);
 	
+	uint64_t *temp = (uint64_t *) out;
+	temp[0] += temp[1];
+	temp[1] = temp[0];
+	
 	for(int i=0; i<HALF_BLOCK_BYTE_SIZE; i++) {
 		out[i] ^= rk[i];
 	}
@@ -214,10 +218,10 @@ int main() {
 	printf("P vs D = %" PRIu64 "\n", diff);
 	
 	uint8_t plainblock2[BLOCK_BYTE_SIZE] = {
-		3, 11, 28, 30, 36, 42, 43, 51, 
+		3, 11, 28, 30, 36, 42, 43, 50, 
 		61, 63, 72, 88, 96, 98, 111, 115, 
 		118, 120, 123, 164, 165, 166, 174, 177, 
-		179, 198, 197, 200, 242, 248, 249, 251
+		179, 198, 197, 200, 242, 248, 249, 250
 	};
 	uint8_t cipherblock2[BLOCK_BYTE_SIZE];
 	uint8_t decryptblock2[BLOCK_BYTE_SIZE];
