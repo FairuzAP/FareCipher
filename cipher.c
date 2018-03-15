@@ -110,7 +110,6 @@ void expand_key(uint8_t const k[KEY_BYTE_SIZE],
 	
 	memcpy(sk, subkeys, SUBKEY_BYTE_SIZE*ROUND_NUM);
 }
-
 void print_sub_key(uint8_t subkeys[ROUND_NUM][SUBKEY_BYTE_SIZE]) {
 	for(int i = 0; i < ROUND_NUM; i++) {
 		for(int j = 0; j < SUBKEY_BYTE_SIZE; j++) {
@@ -165,7 +164,6 @@ void encrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
 
 	}
 }
-
 void decrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
 					uint8_t const sk[ROUND_NUM][SUBKEY_BYTE_SIZE],
 					uint8_t out[BLOCK_BYTE_SIZE]
@@ -184,6 +182,42 @@ void decrypt_blocks(uint8_t const in[BLOCK_BYTE_SIZE],
 		} 
 		memcpy(&out[HALF_BLOCK_BYTE_SIZE], left, HALF_BLOCK_BYTE_SIZE);
 		
+	}
+}
+
+void ecb_encrypt(uint8_t *in, uint8_t *out, size_t len, uint8_t const sk[ROUND_NUM][SUBKEY_BYTE_SIZE]) {
+	for(int i=0; i+BLOCK_BYTE_SIZE<=len; i+=BLOCK_BYTE_SIZE) {
+		encrypt_blocks(in+i, sk, out+i);
+	}
+}
+void ecb_decrypt(uint8_t *in, uint8_t *out, size_t len, uint8_t const sk[ROUND_NUM][SUBKEY_BYTE_SIZE]) {
+	for(int i=0; i+BLOCK_BYTE_SIZE<=len; i+=BLOCK_BYTE_SIZE) {
+		decrypt_blocks(in+i, sk, out+i);
+	}
+}
+
+void cbc_encrypt(uint8_t *in, uint8_t *out, size_t len, uint8_t iv[BLOCK_BYTE_SIZE], uint8_t const sk[ROUND_NUM][SUBKEY_BYTE_SIZE]) {
+	uint8_t iv_cpy[BLOCK_BYTE_SIZE];
+	memcpy(iv_cpy, iv, BLOCK_BYTE_SIZE);
+	
+	for(int i=0; i+BLOCK_BYTE_SIZE<=len; i+=BLOCK_BYTE_SIZE) {
+		for(int j=0; j<BLOCK_BYTE_SIZE; j++) {
+			iv_cpy[j] ^= in[i+j];
+		}
+		encrypt_blocks(iv_cpy, sk, out+i);
+		memcpy(iv_cpy, out+i, BLOCK_BYTE_SIZE);
+	}
+}
+void cbc_decrypt(uint8_t *in, uint8_t *out, size_t len, uint8_t iv[BLOCK_BYTE_SIZE], uint8_t const sk[ROUND_NUM][SUBKEY_BYTE_SIZE]) {
+	uint8_t iv_cpy[BLOCK_BYTE_SIZE];
+	memcpy(iv_cpy, iv, BLOCK_BYTE_SIZE);
+	
+	for(int i=0; i+BLOCK_BYTE_SIZE<=len; i+=BLOCK_BYTE_SIZE) {
+		decrypt_blocks(in+i, sk, out+i);
+		for(int j=0; j<BLOCK_BYTE_SIZE; j++) {
+			out[i+j] ^= iv_cpy[j];
+		}
+		memcpy(iv_cpy, in+i, BLOCK_BYTE_SIZE);
 	}
 }
 
@@ -244,7 +278,6 @@ void test_diffusion() {
 	printf("Cipher Diff = %" PRIu64 "\n", diff);	
 
 }
-
 void test_performance() {
 	
 	struct timespec before;
@@ -294,8 +327,52 @@ void test_performance() {
 
 
 int main() {
-	test_diffusion();
-	test_performance();
+	
+	//test_diffusion();
+	//test_performance();
+	
+	uint8_t key[KEY_BYTE_SIZE] = {
+		27, 66, 72, 73, 100, 101, 104, 110, 
+		119, 120, 122, 129, 132, 135, 138, 142, 
+		144, 151, 159, 160, 196, 212, 214, 220, 
+		224, 234, 235, 237, 238, 241, 248, 252
+	};
+	uint8_t subkeys[ROUND_NUM][SUBKEY_BYTE_SIZE];
+	expand_key(key, subkeys);
+	
+	uint8_t iv[BLOCK_BYTE_SIZE] = {
+		61, 63, 72, 88, 96, 98, 111, 115, 
+		118, 120, 123, 164, 165, 166, 174, 177, 
+		144, 151, 159, 160, 196, 212, 214, 220, 
+		224, 234, 235, 237, 238, 241, 248, 252
+	};
+	
+	uint8_t plainblock[BLOCK_BYTE_SIZE*3] = {
+		3, 11, 28, 30, 36, 42, 43, 51, 
+		61, 63, 72, 88, 96, 98, 111, 115, 
+		118, 120, 123, 164, 165, 166, 174, 177, 
+		179, 198, 197, 200, 242, 248, 249, 250,
+		
+		118, 120, 123, 164, 165, 166, 174, 177, 
+		179, 198, 197, 200, 242, 248, 249, 250,
+		3, 11, 28, 30, 36, 42, 43, 51, 
+		61, 63, 72, 88, 96, 98, 111, 115,
+		
+		118, 120, 123, 164, 165, 166, 174, 177, 
+		179, 198, 197, 200, 242, 248, 249, 250,
+		3, 11, 28, 30, 36, 42, 43, 51, 
+		61, 63, 72, 88, 96, 98, 111, 115
+	};
+	uint8_t cipherblock[sizeof(plainblock)];
+	uint8_t decryptblock[sizeof(plainblock)];
+	cbc_encrypt(plainblock, cipherblock, sizeof(plainblock), iv, subkeys);
+	cbc_decrypt(cipherblock, decryptblock, sizeof(plainblock), iv, subkeys);
+	
+	uint64_t diff = count_bit_change((uint8_t *)plainblock, (uint8_t *)cipherblock, sizeof(plainblock));
+	printf("P vs C = %" PRIu64 "\n", diff);
+	diff = count_bit_change((uint8_t *)plainblock, (uint8_t *)decryptblock, sizeof(plainblock));
+	printf("P vs D = %" PRIu64 "\n", diff);
+	
 	return 0;
 }
 
